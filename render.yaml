@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: nfc-tracker-sirene-api
+    runtime: python
+    plan: free
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SIRENE_CACHE_URL
+        sync: false   # ex. https://github.com/<owner>/<repo>/releases/download/sirene-cache/stock_etablissements_slim.parquet
+      - key: ALLOWED_ORIGINS
+        sync: false   # ex. https://<ton-site>.pages.dev  (ou "*" en attendant)
