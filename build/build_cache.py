@@ -84,44 +84,55 @@ def main():
     """).fetchone()[0]
     print(f"[diagnostic] {total_null} / {total} lignes ont un codePostalEtablissement NULL.")
 
-    print("[traitement] Filtrage + découpage par département (peut prendre 1-2 min)...")
+    print("[traitement] Filtrage + calcul du département (peut prendre 1-2 min)...")
+    # On matérialise d'abord dans une vraie table (CREATE TABLE), plutôt que de calculer le
+    # département à la volée dans le COPY ... PARTITION_BY : lors d'un essai précédent, la même
+    # expression utilisée directement comme colonne de partitionnement n'a donné que 11
+    # départements au lieu d'une centaine, malgré des données sources visiblement saines —
+    # la matérialisation élimine ce genre de comportement inattendu en forçant le calcul complet
+    # AVANT le partitionnement, qui n'a plus ensuite qu'à lire une colonne déjà toute faite.
     con.execute(f"""
-        COPY (
-            SELECT
-                siret,
-                siren,
-                codePostalEtablissement,
-                -- Ne découper proprement (01, 02, ..., 97, 98...) que pour les codes postaux
-                -- à 5 chiffres valides. Sans ce filtre, les codes postaux manquants/mal formés
-                -- (adresses à l'étranger, données incomplètes...) fabriquent chacun leur propre
-                -- "faux département" -> des centaines de petits dossiers parasites au lieu d'une
-                -- centaine de dossiers propres, ce qui alourdit inutilement l'extraction de
-                -- l'archive côté serveur. Tout ce qui n'est pas un code valide part dans une
-                -- seule partition "na" (jamais utile au matching de toute façon : sans code
-                -- postal exploitable, aucune requête ne cible ce département).
-                -- On ne vérifie QUE les 2 premiers caractères (nettoyés des espaces
-                -- superflus) plutôt que d'exiger un code postal de 5 chiffres exact : certains
-                -- exports SIRENE ont des codes postaux avec du bourrage (espace de fin...), et
-                -- une vérification trop stricte les rejette TOUS à tort, y compris les valides
-                -- (vécu : ça a fait s'effondrer 100+ départements en une seule partition "na").
-                CASE
-                    WHEN regexp_matches(substr(trim(codePostalEtablissement), 1, 2), '^[0-9]{2}$')
-                        THEN substr(trim(codePostalEtablissement), 1, 2)
-                    ELSE 'na'
-                END AS department,
-                etatAdministratifEtablissement,
-                dateCreationEtablissement,
-                denominationUsuelleEtablissement,
-                enseigne1Etablissement,
-                enseigne2Etablissement,
-                enseigne3Etablissement,
-                activitePrincipaleEtablissement,
-                TRY_CAST(coordonneeLambertAbscisseEtablissement AS DOUBLE) AS x_lambert,
-                TRY_CAST(coordonneeLambertOrdonneeEtablissement AS DOUBLE) AS y_lambert
-            FROM read_parquet('{RAW_FILE.as_posix()}')
-            WHERE etatAdministratifEtablissement != 'F'
-              AND dateCreationEtablissement IS NOT NULL
-        ) TO '{OUT_DIR.as_posix()}' (FORMAT PARQUET, PARTITION_BY (department), OVERWRITE_OR_IGNORE true)
+        CREATE OR REPLACE TABLE base AS
+        SELECT
+            siret,
+            siren,
+            codePostalEtablissement,
+            -- Ne découper proprement (01, 02, ..., 97, 98...) que pour les codes postaux
+            -- valides. Deux cas très fréquents à exclure (vus dans le diagnostic) : le code
+            -- spécial INSEE "[ND]" (donnée non-diffusible, 2,4 millions de lignes) et les
+            -- codes postaux manquants (NULL). Tout ce qui n'est pas un vrai code part dans une
+            -- seule partition "na" (jamais utile au matching de toute façon).
+            CASE
+                WHEN regexp_matches(substr(trim(codePostalEtablissement), 1, 2), '^[0-9]{2}$')
+                    THEN substr(trim(codePostalEtablissement), 1, 2)
+                ELSE 'na'
+            END AS department,
+            etatAdministratifEtablissement,
+            dateCreationEtablissement,
+            denominationUsuelleEtablissement,
+            enseigne1Etablissement,
+            enseigne2Etablissement,
+            enseigne3Etablissement,
+            activitePrincipaleEtablissement,
+            TRY_CAST(coordonneeLambertAbscisseEtablissement AS DOUBLE) AS x_lambert,
+            TRY_CAST(coordonneeLambertOrdonneeEtablissement AS DOUBLE) AS y_lambert
+        FROM read_parquet('{RAW_FILE.as_posix()}')
+        WHERE etatAdministratifEtablissement != 'F'
+          AND dateCreationEtablissement IS NOT NULL
+    """)
+
+    dep_count, na_count, total_count = con.execute("""
+        SELECT
+            count(DISTINCT department) FILTER (WHERE department != 'na'),
+            count(*) FILTER (WHERE department = 'na'),
+            count(*)
+        FROM base
+    """).fetchone()
+    print(f"[diagnostic] {dep_count} départements distincts détectés (sur {total_count} lignes, {na_count} en 'na').")
+
+    print("[traitement] Découpage par département...")
+    con.execute(f"""
+        COPY base TO '{OUT_DIR.as_posix()}' (FORMAT PARQUET, PARTITION_BY (department), OVERWRITE_OR_IGNORE true)
     """)
     RAW_FILE.unlink(missing_ok=True)
 
