@@ -67,7 +67,19 @@ def main():
                 siret,
                 siren,
                 codePostalEtablissement,
-                substr(codePostalEtablissement, 1, 2) AS department,
+                -- Ne découper proprement (01, 02, ..., 97, 98...) que pour les codes postaux
+                -- à 5 chiffres valides. Sans ce filtre, les codes postaux manquants/mal formés
+                -- (adresses à l'étranger, données incomplètes...) fabriquent chacun leur propre
+                -- "faux département" -> des centaines de petits dossiers parasites au lieu d'une
+                -- centaine de dossiers propres, ce qui alourdit inutilement l'extraction de
+                -- l'archive côté serveur. Tout ce qui n'est pas un code valide part dans une
+                -- seule partition "na" (jamais utile au matching de toute façon : sans code
+                -- postal exploitable, aucune requête ne cible ce département).
+                CASE
+                    WHEN regexp_matches(codePostalEtablissement, '^[0-9]{5}$')
+                        THEN substr(codePostalEtablissement, 1, 2)
+                    ELSE 'na'
+                END AS department,
                 etatAdministratifEtablissement,
                 dateCreationEtablissement,
                 denominationUsuelleEtablissement,
