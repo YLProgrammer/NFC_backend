@@ -75,9 +75,14 @@ def main():
                 -- l'archive côté serveur. Tout ce qui n'est pas un code valide part dans une
                 -- seule partition "na" (jamais utile au matching de toute façon : sans code
                 -- postal exploitable, aucune requête ne cible ce département).
+                -- On ne vérifie QUE les 2 premiers caractères (nettoyés des espaces
+                -- superflus) plutôt que d'exiger un code postal de 5 chiffres exact : certains
+                -- exports SIRENE ont des codes postaux avec du bourrage (espace de fin...), et
+                -- une vérification trop stricte les rejette TOUS à tort, y compris les valides
+                -- (vécu : ça a fait s'effondrer 100+ départements en une seule partition "na").
                 CASE
-                    WHEN regexp_matches(codePostalEtablissement, '^[0-9]{5}$')
-                        THEN substr(codePostalEtablissement, 1, 2)
+                    WHEN regexp_matches(substr(trim(codePostalEtablissement), 1, 2), '^[0-9]{2}$')
+                        THEN substr(trim(codePostalEtablissement), 1, 2)
                     ELSE 'na'
                 END AS department,
                 etatAdministratifEtablissement,
