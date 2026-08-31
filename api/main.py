@@ -61,6 +61,14 @@ app.add_middleware(
 
 _transformer = Transformer.from_crs("EPSG:4326", "EPSG:2154", always_xy=True)
 _con = duckdb.connect()
+# Sur le plan gratuit Render (512 Mo RAM au total, pour tout le process Python + FastAPI + DuckDB),
+# DuckDB peut mal évaluer la mémoire réellement disponible dans un conteneur restreint et tenter
+# d'en utiliser plus que ce qui existe physiquement -> le process se fait tuer (OOM) en plein
+# milieu d'une requête, ce qui coupe la connexion sans réponse (vu côté navigateur comme une
+# erreur CORS générique, alors que le vrai problème est une mémoire insuffisante). On borne donc
+# explicitement, avec une bonne marge sous les 512 Mo pour laisser de la place à Python/FastAPI.
+_con.execute("PRAGMA memory_limit='300MB'")
+_con.execute("PRAGMA threads=2")
 
 
 def ensure_cache():
