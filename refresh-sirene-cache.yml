@@ -1,0 +1,36 @@
+name: Rafraîchir le cache SIRENE
+
+on:
+  schedule:
+    - cron: "0 3 1 * *"   # le 1er de chaque mois à 3h UTC (le stock INSEE est remis à jour tous les mois)
+  workflow_dispatch: {}    # bouton "Run workflow" dans l'onglet Actions, pour forcer un refresh manuel
+
+permissions:
+  contents: write   # nécessaire pour créer/mettre à jour la release qui héberge le fichier
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: pip install -r build/requirements.txt
+
+      - name: Construire le cache SIRENE allégé
+        run: python build/build_cache.py
+
+      - name: Publier comme asset de release (écrase la version précédente)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=sirene-cache
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "Cache SIRENE (allégé)" \
+              --notes "Reconstruit automatiquement le 1er de chaque mois par refresh-sirene-cache.yml."
+          gh release upload "$TAG" stock_etablissements_slim.tar.gz --clobber
