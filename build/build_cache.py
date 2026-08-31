@@ -59,8 +59,32 @@ def main():
     if OUT_DIR.exists():
         shutil.rmtree(OUT_DIR)
 
-    print("[traitement] Filtrage + découpage par département (peut prendre 1-2 min)...")
     con = duckdb.connect()
+
+    print("[diagnostic] Aperçu des codes postaux bruts (20 valeurs les plus fréquentes)...")
+    sample = con.execute(f"""
+        SELECT codePostalEtablissement, count(*) AS n
+        FROM read_parquet('{RAW_FILE.as_posix()}')
+        WHERE etatAdministratifEtablissement != 'F' AND dateCreationEtablissement IS NOT NULL
+        GROUP BY codePostalEtablissement
+        ORDER BY n DESC
+        LIMIT 20
+    """).fetchall()
+    for cp, n in sample:
+        print(f"  {cp!r} ({n})")
+
+    total_null = con.execute(f"""
+        SELECT count(*) FROM read_parquet('{RAW_FILE.as_posix()}')
+        WHERE etatAdministratifEtablissement != 'F' AND dateCreationEtablissement IS NOT NULL
+          AND codePostalEtablissement IS NULL
+    """).fetchone()[0]
+    total = con.execute(f"""
+        SELECT count(*) FROM read_parquet('{RAW_FILE.as_posix()}')
+        WHERE etatAdministratifEtablissement != 'F' AND dateCreationEtablissement IS NOT NULL
+    """).fetchone()[0]
+    print(f"[diagnostic] {total_null} / {total} lignes ont un codePostalEtablissement NULL.")
+
+    print("[traitement] Filtrage + découpage par département (peut prendre 1-2 min)...")
     con.execute(f"""
         COPY (
             SELECT
