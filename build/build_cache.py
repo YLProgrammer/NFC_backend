@@ -102,9 +102,15 @@ def main():
             -- spécial INSEE "[ND]" (donnée non-diffusible, 2,4 millions de lignes) et les
             -- codes postaux manquants (NULL). Tout ce qui n'est pas un vrai code part dans une
             -- seule partition "na" (jamais utile au matching de toute façon).
+            -- Comparaison caractère par caractère plutôt qu'une regex : un essai précédent avec
+            -- regexp_matches('^[0-9]{2}$', ...) a fait basculer la quasi-totalité des lignes en
+            -- 'na' (y compris des codes visiblement valides comme "75008"), signe d'un problème
+            -- avec la regex elle-même plutôt qu'avec les données. BETWEEN '0' AND '9' sur
+            -- chaque caractère ne laisse aucune place à ce genre d'ambiguïté.
             CASE
-                WHEN regexp_matches(substr(trim(codePostalEtablissement), 1, 2), '^[0-9]{2}$')
-                    THEN substr(trim(codePostalEtablissement), 1, 2)
+                WHEN substr(codePostalEtablissement, 1, 1) BETWEEN '0' AND '9'
+                 AND substr(codePostalEtablissement, 2, 1) BETWEEN '0' AND '9'
+                    THEN substr(codePostalEtablissement, 1, 2)
                 ELSE 'na'
             END AS department,
             etatAdministratifEtablissement,
