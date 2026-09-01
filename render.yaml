@@ -11,3 +11,7 @@ services:
         sync: false   # ex. https://github.com/<owner>/<repo>/releases/download/sirene-cache/stock_etablissements_slim.parquet
       - key: ALLOWED_ORIGINS
         sync: false   # ex. https://<ton-site>.pages.dev  (ou "*" en attendant)
+      - key: SUPABASE_URL
+        sync: false   # ex. https://xxxxx.supabase.co (projet gratuit, voir README)
+      - key: SUPABASE_KEY
+        sync: false   # clé "service_role" du projet Supabase (jamais exposée au front)
