@@ -129,6 +129,22 @@ def create_vente(vente: VenteIn):
     return {"ok": True}
 
 
+@router.delete("/ventes")
+def delete_vente(businessId: str):
+    # Appelé quand l'utilisateur fait "Annuler (remettre non traité)" sur un commerce déjà marqué
+    # vendu/échoué : on retire la (les) ligne(s) correspondante(s) pour ne pas fausser les stats
+    # de réussite avec un résultat que l'utilisateur a lui-même invalidé.
+    res = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{TABLE}",
+        headers=_headers(),
+        params={"business_id": f"eq.{businessId}"},
+        timeout=15,
+    )
+    if res.status_code >= 300:
+        raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
+    return {"ok": True}
+
+
 def _fetch_rows(category_id: str, bucket: Optional[str] = None):
     params = {"category_id": f"eq.{category_id}", "select": "status,price_offered,bucket"}
     if bucket:
