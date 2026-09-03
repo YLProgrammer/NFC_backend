@@ -48,6 +48,14 @@ common/  → algorithme de matching partagé (identique à l'ancien sirene_dates
        amount numeric,
        created_at timestamptz not null default now()
      );
+
+     -- Stockage centralisé générique (statuts, commerces masqués, caches SIRENE et villes) —
+     -- remplace le localStorage du navigateur comme source de vérité, voir api/state.py.
+     create table app_state (
+       key text primary key,
+       value jsonb not null,
+       updated_at timestamptz not null default now()
+     );
      ```
    - Onglet *Project Settings* → *API* : noter l'**URL du projet** et la clé
      **`service_role`** (pas la clé `anon` — celle-ci reste uniquement côté
@@ -103,6 +111,27 @@ const res = await fetch(
   `https://<ton-url-render>/stats?categoryId=${categoryId}&ancienneteMois=${ancienneteMois}`
 );
 const { successRate, suggestedPrice } = await res.json();
+
+// Quand l'utilisateur fait "Annuler" sur un commerce déjà marqué vendu/échoué
+await fetch(`https://<ton-url-render>/ventes?businessId=${businessId}`, { method: "DELETE" });
+```
+
+Un dernier couple d'endpoints (voir `api/state.py`) centralise le reste des
+données qui vivaient jusque-là uniquement dans le localStorage du navigateur
+(statuts de vente, commerces masqués, caches SIRENE et villes) — le serveur
+devient la source de vérité, partagée entre tous les appareils :
+
+```js
+// Au chargement : récupérer la version serveur d'une clé (null si jamais enregistrée)
+const res = await fetch(`https://<ton-url-render>/state/nfc-tracker-statuses`);
+const { value } = await res.json();
+
+// À chaque écriture : enregistrer la nouvelle valeur (n'importe quel objet/tableau JSON)
+await fetch(`https://<ton-url-render>/state/nfc-tracker-statuses`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(bizStatuses),
+});
 ```
 
 ## Le mois suivant
