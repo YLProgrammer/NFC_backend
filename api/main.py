@@ -70,7 +70,11 @@ app = FastAPI(title="NFC Tracker — Sirene Matching API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["POST", "GET"],
+    # "*" plutôt qu'une liste explicite : au fil des ajouts (POST/GET au départ, puis DELETE pour
+    # /ventes, PUT pour /state...) une liste figée finit toujours par manquer une méthode et
+    # provoquer exactement ce bug (preflight OPTIONS refusé côté navigateur). Un seul utilisateur,
+    # pas d'enjeu à restreindre finement les méthodes ici.
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 app.include_router(sales_router)
