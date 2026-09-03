@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
 from sirene_common import match_entries, DATES_EXPORT_TYPE, DATES_EXPORT_VERSION  # noqa: E402
 
 from sales import router as sales_router  # noqa: E402
+from state import router as state_router  # noqa: E402
 
 # URL de l'asset publié par le job GitHub Actions. À définir via la variable
 # d'environnement SIRENE_CACHE_URL sur Render une fois le dépôt en place, ex. :
@@ -73,6 +74,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(sales_router)
+app.include_router(state_router)
 
 _transformer = Transformer.from_crs("EPSG:4326", "EPSG:2154", always_xy=True)
 _con = duckdb.connect()
