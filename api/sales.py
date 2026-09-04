@@ -28,11 +28,20 @@ Endpoints :
         Enregistre un résultat de vente (vendu ou échec — "à repasser"
         n'est pas un résultat final, il n'est pas envoyé ici).
 
-    GET /stats?categoryId=...&ancienneteMois=...
+    GET /stats?categoryId=...&ancienneteMois=...&reviewsCount=...
         Taux de réussite lissé + prix conseillé, calculés à partir des
-        ventes déjà enregistrées pour des commerces de même catégorie et de
-        tranche d'ancienneté proche (élargi à la catégorie seule si
-        l'échantillon sur ce croisement précis est trop faible).
+        ventes déjà enregistrées pour des commerces de même catégorie, de
+        tranche d'ancienneté proche ET de tranche d'avis Google proche
+        (reviewsCount brut, rattaché ici à une tranche via REVIEWS_BUCKETS —
+        même logique qu'ancienneteMois/BUCKETS) — élargi d'abord en retirant
+        les avis, puis en ne gardant que la catégorie, si l'échantillon est
+        trop faible à chaque étape.
+
+Nécessite une colonne supplémentaire sur la table Supabase `ventes` :
+    ALTER TABLE ventes ADD COLUMN reviews_bucket text;
+(nullable — les lignes enregistrées avant cet ajout auront simplement
+reviews_bucket = null, ce qui les exclut naturellement du croisement le
+plus précis mais pas des croisements élargis).
 """
 import os
 import statistics
@@ -59,6 +68,18 @@ BUCKETS = [
     (180, None, "15 ans et +"),
 ]
 
+# Mêmes tranches que côté front (script.js, REVIEWS_STATS_BUCKETS) — les libellés n'ont pas besoin
+# de matcher le front puisque c'est ICI qu'on transforme reviewsCount en tranche (même logique que
+# bucket_label()/BUCKETS pour ancienneteMois), mais on les garde identiques pour rester lisible
+# d'un bout à l'autre du projet.
+REVIEWS_BUCKETS = [
+    (0, 1, "aucun avis"),
+    (1, 10, "1-9 avis"),
+    (10, 50, "10-49 avis"),
+    (50, 200, "50-199 avis"),
+    (200, None, "200+ avis"),
+]
+
 DEFAULT_PRICE = 25.0
 # En dessous de ce nombre de ventes réussies sur le croisement exact, on élargit d'abord à la
 # catégorie seule, puis on retombe sur le prix par défaut si ça ne suffit toujours pas.
@@ -73,6 +94,15 @@ def bucket_label(months: Optional[int]) -> Optional[str]:
         return None
     for lo, hi, label in BUCKETS:
         if months >= lo and (hi is None or months < hi):
+            return label
+    return None
+
+
+def reviews_bucket_label(count: Optional[int]) -> Optional[str]:
+    if count is None:
+        return None
+    for lo, hi, label in REVIEWS_BUCKETS:
+        if count >= lo and (hi is None or count < hi):
             return label
     return None
 
@@ -96,6 +126,7 @@ class VenteIn(BaseModel):
     categoryId: str
     categoryLabel: Optional[str] = None
     ancienneteMois: Optional[int] = None
+    reviewsCount: Optional[int] = None
     status: str  # "vendu" | "echec"
     priceOffered: Optional[float] = None
     amount: Optional[float] = None
@@ -108,6 +139,8 @@ class VenteIn(BaseModel):
             "category_label": self.categoryLabel,
             "anciennete_mois": self.ancienneteMois,
             "bucket": bucket_label(self.ancienneteMois),
+            "reviews_count": self.reviewsCount,
+            "reviews_bucket": reviews_bucket_label(self.reviewsCount),
             "status": self.status,
             "price_offered": self.priceOffered,
             "amount": self.amount,
@@ -145,10 +178,12 @@ def delete_vente(businessId: str):
     return {"ok": True}
 
 
-def _fetch_rows(category_id: str, bucket: Optional[str] = None):
-    params = {"category_id": f"eq.{category_id}", "select": "status,price_offered,bucket"}
+def _fetch_rows(category_id: str, bucket: Optional[str] = None, reviews_bucket: Optional[str] = None):
+    params = {"category_id": f"eq.{category_id}", "select": "status,price_offered,bucket,reviews_bucket"}
     if bucket:
         params["bucket"] = f"eq.{bucket}"
+    if reviews_bucket:
+        params["reviews_bucket"] = f"eq.{reviews_bucket}"
     res = requests.get(
         f"{SUPABASE_URL}/rest/v1/{TABLE}",
         headers=_headers(),
@@ -161,13 +196,24 @@ def _fetch_rows(category_id: str, bucket: Optional[str] = None):
 
 
 @router.get("/stats")
-def stats(categoryId: str, ancienneteMois: Optional[int] = None):
+def stats(categoryId: str, ancienneteMois: Optional[int] = None, reviewsCount: Optional[int] = None):
     bucket = bucket_label(ancienneteMois)
+    reviews_bucket = reviews_bucket_label(reviewsCount)
 
-    rows = _fetch_rows(categoryId, bucket) if bucket else []
-    scope = "categorie_et_anciennete"
+    # Élargissement en 3 paliers, du plus précis au plus large : catégorie + ancienneté + avis,
+    # puis catégorie + ancienneté seule, puis catégorie seule. Chaque palier n'est tenté que si le
+    # précédent n'a pas assez de résultats pour être fiable (MIN_SAMPLE_FOR_RATE) — comme pour
+    # l'élargissement ancienneté -> catégorie qui existait déjà, juste avec un niveau de plus.
+    rows = []
+    scope = "categorie_seule"
+    if bucket and reviews_bucket:
+        rows = _fetch_rows(categoryId, bucket, reviews_bucket)
+        scope = "categorie_anciennete_avis"
+    if len(rows) < MIN_SAMPLE_FOR_RATE and bucket:
+        rows = _fetch_rows(categoryId, bucket)
+        scope = "categorie_et_anciennete"
     if len(rows) < MIN_SAMPLE_FOR_RATE:
-        rows = _fetch_rows(categoryId)  # échantillon trop faible sur ce croisement précis -> élargir
+        rows = _fetch_rows(categoryId)  # échantillon trop faible sur tout croisement précis -> catégorie seule
         scope = "categorie_seule"
 
     success = sum(1 for r in rows if r["status"] == "vendu")
