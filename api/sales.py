@@ -176,7 +176,20 @@ def delete_vente(businessId: str):
     if res.status_code >= 300:
         raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
     return {"ok": True}
-
+@router.delete("/ventes/all")
+def delete_all_ventes():
+    # Remise à zéro complète des stats anonymisées de vente — supprime TOUTES les lignes de la
+    # table. Irréversible. PostgREST refuse un DELETE sans filtre, d'où le filtre "toujours vrai"
+    # ci-dessous (business_id est une colonne obligatoire, donc jamais null).
+    res = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{TABLE}",
+        headers=_headers(),
+        params={"business_id": "not.is.null"},
+        timeout=15,
+    )
+    if res.status_code >= 300:
+        raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
+    return {"ok": True}
 
 def _fetch_rows(category_id: str, bucket: Optional[str] = None, reviews_bucket: Optional[str] = None):
     params = {"category_id": f"eq.{category_id}", "select": "status,price_offered,bucket,reviews_bucket"}
