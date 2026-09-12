@@ -42,7 +42,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from pyproj import Transformer
-
+from api import advice
+app.include_router(advice.router)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
 from sirene_common import match_entries, DATES_EXPORT_TYPE, DATES_EXPORT_VERSION  # noqa: E402
 
