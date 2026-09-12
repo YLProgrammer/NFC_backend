@@ -234,6 +234,23 @@ def store_question_response(payload: QuestionResponseIn):
 # Flux B — conseil, lecture seule (pas de nouvelle question générée ici)
 # ---------------------------------------------------------------------------
 
+@router.delete("/business-qa/all")
+def delete_all_business_qa():
+    # Remise à zéro complète — supprime TOUTES les questions/réponses IA collectées. Irréversible.
+    # PostgREST refuse un DELETE sans filtre, d'où le filtre "toujours vrai" ci-dessous
+    # (business_id est une colonne obligatoire, donc jamais null), même pattern que
+    # /ventes/all dans sales.py.
+    res = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{TABLE}",
+        headers=_headers(),
+        params={"business_id": "not.is.null"},
+        timeout=15,
+    )
+    if res.status_code >= 300:
+        raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
+    return {"ok": True}
+
+
 @router.get("/business-qa/advice")
 def advice(businessId: str, categoryId: str, businessName: Optional[str] = None,
            categoryLabel: Optional[str] = None, ancienneteMois: Optional[int] = None,

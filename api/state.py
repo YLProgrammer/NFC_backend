@@ -79,3 +79,20 @@ async def put_state(key: str, request: Request):
     if res.status_code >= 300:
         raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
     return {"ok": True}
+
+
+@router.delete("/state")
+def delete_all_state():
+    # Remise à zéro complète — supprime TOUTES les clés (statuts, commerces masqués, cache
+    # SIRENE, cache commerces par ville). Irréversible. PostgREST refuse un DELETE sans filtre,
+    # d'où le filtre "toujours vrai" ci-dessous (key est une colonne obligatoire, donc jamais null),
+    # même pattern que /ventes/all dans sales.py.
+    res = requests.delete(
+        f"{SUPABASE_URL}/rest/v1/{TABLE}",
+        headers=_headers(),
+        params={"key": "not.is.null"},
+        timeout=15,
+    )
+    if res.status_code >= 300:
+        raise HTTPException(502, f"Erreur Supabase ({res.status_code}) : {res.text[:300]}")
+    return {"ok": True}
