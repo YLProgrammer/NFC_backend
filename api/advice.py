@@ -69,7 +69,7 @@ from pydantic import BaseModel
 from sales import SUPABASE_URL, SUPABASE_KEY, _headers, bucket_label, reviews_bucket_label
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 TABLE = "business_qa"
