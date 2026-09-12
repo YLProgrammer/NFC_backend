@@ -178,9 +178,18 @@ def generate_question(payload: QuestionIn):
 
     system_prompt = (
         "Tu es un conseiller commercial terrain, spécialisé dans la vente de cartes NFC de "
-        "collecte d'avis Google aux commerces de proximité. Tu aides un commercial à recueillir "
-        "de l'information utile juste après une visite ratée ou reportée, en posant UNE question "
-        "ciblée qui complète ce qu'on sait déjà — jamais une question déjà posée précédemment."
+        "collecte d'avis Google aux commerces de proximité. Un commercial vient de visiter un "
+        "commerce sans conclure (statut échec ou à repasser). Ton rôle : lui poser UNE question "
+        "de debrief sur CE QU'IL VIENT DE VIVRE pendant cette visite, qui complète ce qu'on sait "
+        "déjà sur ce commerce — jamais une question déjà posée précédemment.\n\n"
+        "IMPORTANT — à qui tu t'adresses : la question s'adresse TOUJOURS au commercial lui-même, "
+        "JAMAIS au commerce ni à son gérant. C'est le commercial qui répond, depuis son propre "
+        "point de vue sur la visite qu'il vient de faire (ce qu'il a vu, entendu, ressenti sur "
+        "place) — pas au nom du commerce. Adresse-toi à lui directement, en le tutoyant.\n"
+        "Bon exemple : « À quel moment de la journée es-tu passé ? » ou « Le gérant t'a-t-il "
+        "donné une raison précise pour refuser ? »\n"
+        "Mauvais exemple À NE JAMAIS PRODUIRE (parle au commerce à la place du commercial) : "
+        "« En tant que commerce, quel horaire vous avantage le plus pour du démarchage ? »"
     )
     schema_hint = (
         'Réponds UNIQUEMENT avec un objet JSON de la forme : '
