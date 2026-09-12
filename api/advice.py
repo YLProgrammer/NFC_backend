@@ -55,8 +55,8 @@ Table Supabase à créer avant de déployer (voir README) :
 
 À enregistrer dans main.py, comme pour sales.py :
 
-    from api import advice
-    app.include_router(advice.router)
+    from advice import router as advice_router
+    app.include_router(advice_router)
 """
 import os
 import json
@@ -66,7 +66,7 @@ import requests
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .sales import SUPABASE_URL, SUPABASE_KEY, _headers, bucket_label, reviews_bucket_label
+from sales import SUPABASE_URL, SUPABASE_KEY, _headers, bucket_label, reviews_bucket_label
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = "llama-3.3-70b-versatile"
