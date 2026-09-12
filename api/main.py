@@ -42,8 +42,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 from pyproj import Transformer
-from api import advice
-app.include_router(advice.router)
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "common"))
 from sirene_common import match_entries, DATES_EXPORT_TYPE, DATES_EXPORT_VERSION  # noqa: E402
 
@@ -80,7 +79,8 @@ app.add_middleware(
 )
 app.include_router(sales_router)
 app.include_router(state_router)
-
+from advice import router as advice_router
+app.include_router(advice_router)
 _transformer = Transformer.from_crs("EPSG:4326", "EPSG:2154", always_xy=True)
 _con = duckdb.connect()
 # Sur le plan gratuit Render (512 Mo RAM au total, pour tout le process Python + FastAPI + DuckDB),
